@@ -1,0 +1,55 @@
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+
+const app = express();
+const port = 3000;
+
+// Open a database connection
+let db = new sqlite3.Database('./database.db', (err) => {
+    if (err) {
+        console.error(err.message);
+        throw err;
+    }
+    console.log('Connected to the SQLite database.');
+});
+
+app.get('/', (req, res) => {
+    try {
+        // Get the client's IP address from the request
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+        // Reverse the IP address
+        const reversedIp = clientIp.split('').reverse().join('');
+
+        // Store the reversed IP in the database
+        const insertQuery = `INSERT INTO ip_addresses (reversed_ip) VALUES (?)`;
+        db.run(insertQuery, [reversedIp], function(err) {
+            if (err) {
+                console.error('Error inserting data:', err.message);
+                return res.status(500).send('Internal Server Error');
+            }
+            console.log(`A row has been inserted with rowid ${this.lastID}`);
+        });
+
+        // Send the reversed IP address as the response
+        res.send(`Reversed IP: ${reversedIp}`);
+    } catch (error) {
+        console.error('Error processing request:', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+});
+
+// Close the database connection gracefully on server shutdown
+process.on('SIGINT', () => {
+    db.close((err) => {
+        if (err) {
+            console.error(err.message);
+        }
+        console.log('Closed the database connection.');
+        process.exit(0);
+    });
+});
